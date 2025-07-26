@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>記憶翻牌遊戲</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #74ebd5, #acb6e5);
+            margin: 0;
+            overflow: auto;
+        }
+        #game-container {
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 90%;
+        }
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(4, 90px);
+            grid-gap: 12px;
+            margin: 20px auto;
+            justify-content: center;
+        }
+        .card {
+            width: 90px;
+            height: 90px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.4s ease, box-shadow 0.2s ease;
+        }
+        .card:hover:not(.flipped):not(.matched) {
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+            transform: translateY(-3px);
+        }
+        .card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            backface-visibility: hidden;
+            display: none;
+            border-radius: 8px;
+        }
+        .card .back {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, #6b7280, #9ca3af);
+            position: absolute;
+            backface-visibility: hidden;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card .back::after {
+            content: '🎴';
+            font-size: 2em;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .card.flipped img {
+            display: block;
+        }
+        .card.flipped .back {
+            display: none;
+        }
+        .card.matched {
+            opacity: 0.7;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+        }
+        #info {
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 0 10px;
+        }
+        #info div {
+            background-color: #e6e6fa;
+            padding: 8px 12px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            background: linear-gradient(45deg, #4CAF50, #66bb6a);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(45deg, #45a049, #5cb85c);
+        }
+        @media (max-width: 480px) {
+            #game-board {
+                grid-template-columns: repeat(4, 70px);
+                grid-gap: 8px;
+            }
+            .card {
+                width: 70px;
+                height: 70px;
+            }
+            #game-container {
+                padding: 15px;
+            }
+            #info {
+                font-size: 1em;
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="info">
+            <div>分數: <span id="score">0</span></div>
+            <div>時間: <span id="time">0</span> 秒</div>
+        </div>
+        <button id="start-button">開始遊戲</button>
+        <div id="game-board"></div>
+    </div>
+
+    <script>
+        const gameBoard = document.getElementById('game-board');
+        const startButton = document.getElementById('start-button');
+        const scoreDisplay = document.getElementById('score');
+        const timeDisplay = document.getElementById('time');
+        const gameContainer = document.getElementById('game-container');
+        let cards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let score = 0;
+        let time = 0;
+        let timerInterval;
+        let gameStarted = false;
+
+        const imagePaths = Array.from({length: 8}, (_, i) => `pic/c (${i + 1}).png`);
+
+        function createCards() {
+            const cardValues = [...imagePaths, ...imagePaths];
+            for (let i = cardValues.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [cardValues[i], cardValues[j]] = [cardValues[j], cardValues[i]];
+            }
+            return cardValues;
+        }
+
+        function initializeGame() {
+            gameBoard.innerHTML = '';
+            cards = [];
+            flippedCards = [];
+            matchedPairs = 0;
+            score = 0;
+            time = 0;
+            gameStarted = false;
+            scoreDisplay.textContent = score;
+            timeDisplay.textContent = time;
+            clearInterval(timerInterval);
+            startButton.textContent = '開始遊戲';
+            startButton.style.display = 'block';
+
+            const cardValues = createCards();
+            cardValues.forEach((value, index) => {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.dataset.value = value;
+                card.innerHTML = `
+                    <img src="${value}" class="front">
+                    <div class="back"></div>
+                `;
+                card.addEventListener('click', () => flipCard(card));
+                gameBoard.appendChild(card);
+                cards.push(card);
+            });
+        }
+
+        function flipCard(card) {
+            if (!gameStarted || card.classList.contains('flipped') || card.classList.contains('matched')) return;
+
+            if (flippedCards.length >= 2) {
+                flippedCards.forEach(c => c.classList.remove('flipped'));
+                flippedCards = [];
+            }
+
+            card.classList.add('flipped');
+            flippedCards.push(card);
+
+            if (flippedCards.length === 2) {
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            const [card1, card2] = flippedCards;
+            if (card1.dataset.value === card2.dataset.value) {
+                card1.classList.add('matched');
+                card2.classList.add('matched');
+                score += 100;
+                scoreDisplay.textContent = score;
+                matchedPairs++;
+                flippedCards = [];
+                if (matchedPairs === 8) {
+                    endGame();
+                }
+            }
+        }
+
+        function startGame() {
+            if (gameStarted) return;
+            gameStarted = true;
+            startButton.style.display = 'none';
+            timerInterval = setInterval(() => {
+                time++;
+                timeDisplay.textContent = time;
+            }, 1000);
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            const timeBonus = Math.max(0, 1000 - time);
+            score += timeBonus;
+            scoreDisplay.textContent = score;
+            gameStarted = false;
+
+            const replayButton = document.createElement('button');
+            replayButton.textContent = '重玩';
+            replayButton.addEventListener('click', () => {
+                initializeGame();
+                replayButton.remove();
+            });
+            gameContainer.appendChild(replayButton);
+        }
+
+        startButton.addEventListener('click', startGame);
+        initializeGame();
+    </script>
+</body>
+</html>
